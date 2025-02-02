@@ -1,5 +1,3 @@
-
-
 // Helper to clean song title for better matching
 export function cleanSongTitle(title: string): string {
   const patterns = [
@@ -99,6 +97,37 @@ export async function createPlaylist(
     throw new Error('No tracks found')
   }
 
+  // Check for recent playlist to avoid duplication
+  try {
+    const existingPlaylistId = await findRecentPlaylist(accessToken)
+    if (existingPlaylistId) {
+      logger('Found existing playlist', 'info', { playlistId: existingPlaylistId })
+      
+      // Add tracks to existing playlist
+      const addTracksResponse = await fetch(`https://api.spotify.com/v1/playlists/${existingPlaylistId}/tracks`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ uris: foundTracks })
+      })
+
+      if (!addTracksResponse.ok) {
+        throw new Error('Failed to add tracks to existing playlist')
+      }
+
+      return { 
+        playlistId: existingPlaylistId,
+        trackIds: foundTracks.map(uri => uri.split(':')[2])
+      }
+    }
+  } catch (error) {
+    logger('Error checking existing playlist', 'error', { error: String(error) })
+    // Continue with creating new playlist if check fails
+  }
+
+  // Create new playlist only if no recent playlist exists
   // 2. Create playlist
   logger('Creating playlist', 'info', { trackCount: foundTracks.length })
   const userId = await getCurrentUserId(accessToken)
@@ -241,4 +270,67 @@ export async function getPlaylistTracks(accessToken: string, playlistId: string)
     }
     return track
   }).filter(Boolean)
+}
+
+export async function renamePlaylist(accessToken: string, playlistId: string, name: string) {
+  const response = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}`, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ name })
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to update playlist name')
+  }
+}
+
+export async function getPlaylistDetails(accessToken: string, playlistId: string) {
+  const response = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}`, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`
+    }
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to get playlist details')
+  }
+
+  const data = await response.json()
+  
+  const tracks = data.tracks.items.map((item: { track?: SpotifyTrackResponse }) => {
+    if (!item?.track) return null
+    return {
+      id: item.track.id || '',
+      name: item.track.name || 'Unknown Track',
+      artist: item.track.artists?.[0]?.name || 'Unknown Artist',
+      album: item.track.album?.name || 'Unknown Album',
+      duration: item.track.duration_ms || 0,
+      image: item.track.album?.images?.[0]?.url || null,
+      previewUrl: item.track.preview_url || null
+    }
+  }).filter(Boolean)
+
+  return {
+    name: data.name,
+    url: data.external_urls?.spotify,
+    tracks
+  }
+}
+
+export async function findRecentPlaylist(accessToken: string) {
+  const response = await fetch('https://api.spotify.com/v1/me/playlists?limit=1', {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`
+    }
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to check recent playlists')
+  }
+
+  const data = await response.json()
+  return data.items[0]?.id
 } 
