@@ -1,3 +1,5 @@
+
+
 // Helper to clean song title for better matching
 export function cleanSongTitle(title: string): string {
   const patterns = [
@@ -58,11 +60,13 @@ export async function searchTrack(accessToken: string, artist: string, title: st
   return null
 }
 
+type LoggerFunction = (type: string, level: 'info' | 'error', data: Record<string, unknown>) => void
+
 export async function createPlaylist(
   accessToken: string, 
   name: string, 
   songs: string[],
-  logger: (type: string, level: string, data: any) => void
+  logger: LoggerFunction
 ) {
   if (!accessToken) throw new Error('No access token provided')
   if (!songs.length) throw new Error('No songs provided')
@@ -195,7 +199,18 @@ export async function getPlaylistUrl(accessToken: string, playlistId: string) {
   return data.external_urls?.spotify
 }
 
-// Add this function to get playlist tracks
+type SpotifyTrackResponse = {
+  id: string
+  name: string
+  artists: { name: string }[]
+  album: {
+    name: string
+    images: { url: string }[]
+  }
+  duration_ms: number
+  preview_url: string | null
+}
+
 export async function getPlaylistTracks(accessToken: string, playlistId: string) {
   const response = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
     headers: {
@@ -208,11 +223,22 @@ export async function getPlaylistTracks(accessToken: string, playlistId: string)
   }
 
   const data = await response.json()
-  return data.items.map((item: any) => ({
-    name: item.track.name,
-    artist: item.track.artists[0].name,
-    album: item.track.album.name,
-    duration: item.track.duration_ms,
-    image: item.track.album.images[0]?.url
-  }))
+  
+  return data.items.map((item: { track?: SpotifyTrackResponse }) => {
+    if (!item?.track) {
+      console.error('Invalid track data:', item)
+      return null
+    }
+
+    const track = {
+      id: item.track.id || '',
+      name: item.track.name || 'Unknown Track',
+      artist: item.track.artists?.[0]?.name || 'Unknown Artist',
+      album: item.track.album?.name || 'Unknown Album',
+      duration: item.track.duration_ms || 0,
+      image: item.track.album?.images?.[0]?.url || null,
+      previewUrl: item.track.preview_url || null
+    }
+    return track
+  }).filter(Boolean)
 } 

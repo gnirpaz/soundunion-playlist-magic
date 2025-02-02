@@ -1,7 +1,7 @@
 "use client"
 
-import { createContext, useContext, useState, useCallback } from 'react'
-import { X, Copy, Check, ChevronRight, ChevronDown } from "lucide-react"
+import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react'
+import { X, Copy, Check, ChevronRight, ChevronDown, ChevronLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 type LogEntry = {
@@ -34,8 +34,17 @@ export function useDebug() {
 }
 
 export function DebugProvider({ children }: { children: React.ReactNode }) {
+  const [isOpen, setIsOpen] = useState(false)  // Start closed by default
   const [logGroups, setLogGroups] = useState<LogGroup[]>([])
   const [copied, setCopied] = useState(false)
+  const logsContainerRef = useRef<HTMLDivElement>(null)
+
+  // Auto-scroll when logs update
+  useEffect(() => {
+    if (logsContainerRef.current) {
+      logsContainerRef.current.scrollTop = logsContainerRef.current.scrollHeight
+    }
+  }, [logGroups])
 
   const addLog = useCallback((message: string, type: 'info' | 'error', data?: Record<string, unknown>, groupId?: string) => {
     const entry = {
@@ -150,14 +159,27 @@ export function DebugProvider({ children }: { children: React.ReactNode }) {
   return (
     <DebugContext.Provider value={{ addLog, clearLogs }}>
       <div className="flex">
-        {/* Main Content */}
-        <div className="flex-1">
+        {/* Main Content - dynamic width based on panel state */}
+        <div className={`flex-1 transition-all duration-300 ${isOpen ? 'pr-[400px]' : ''}`}>
           {children}
         </div>
 
-        {/* Debug Panel */}
-        <div className="w-[400px] h-screen fixed right-0 top-0 bg-black/95 border-l border-neutral-800 font-mono text-xs flex flex-col">
-          {/* Header */}
+        {/* Debug Panel - slides in/out */}
+        <div 
+          className={`w-[400px] h-screen fixed right-0 top-0 bg-black/95 border-l border-neutral-800 
+            font-mono text-xs flex flex-col transition-transform duration-300 
+            ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        >
+          {/* Toggle Button */}
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className="absolute left-0 top-1/2 -translate-x-full transform bg-black/95 text-neutral-400 
+              p-2 rounded-l-md border border-r-0 border-neutral-800 hover:text-neutral-200"
+          >
+            {isOpen ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+          </button>
+
+          {/* Rest of debug panel content */}
           <div className="flex items-center justify-between p-2 border-b border-neutral-800">
             <span className="text-neutral-400">Debug Console ({totalLogs})</span>
             <div className="flex items-center space-x-2">
@@ -191,9 +213,11 @@ export function DebugProvider({ children }: { children: React.ReactNode }) {
               </Button>
             </div>
           </div>
-
-          {/* Logs */}
-          <div className="flex-1 overflow-y-auto p-2 space-y-4">
+          
+          <div 
+            ref={logsContainerRef}
+            className="flex-1 overflow-y-auto p-2 space-y-4"
+          >
             {logGroups.map(group => (
               <div key={group.id} className="space-y-2">
                 {logGroups.length > 1 && (

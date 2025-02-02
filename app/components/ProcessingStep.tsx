@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
-import { useSession, signIn } from "next-auth/react"
+import { useSession, signIn, getSession } from "next-auth/react"
 import { createPlaylist } from "@/app/utils/spotify"
 import { useDebug } from "@/app/providers/DebugProvider"
 import { Button } from "@/components/ui/button"
@@ -18,10 +18,11 @@ export default function ProcessingStep({ songs, onComplete, onError }: Processin
 
   useEffect(() => {
     if (!session?.accessToken || !songs.length) return
+    const token = session.accessToken
 
     async function processWithRetry() {
       try {
-        await createPlaylist(session.accessToken, 'My Playlist', songs, addLog)
+        await createPlaylist(token, 'My Playlist', songs, addLog)
           .then(result => {
             onComplete([result.playlistId])
           })
