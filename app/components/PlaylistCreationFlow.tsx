@@ -8,7 +8,11 @@ import ReviewAndShare from "./ReviewAndShare"
 
 type Step = "input" | "processing" | "naming" | "review"
 
-export default function PlaylistCreationFlow() {
+type PlaylistCreationFlowProps = {
+  onCreatePlaylist: () => void
+}
+
+export default function PlaylistCreationFlow({ onCreatePlaylist }: PlaylistCreationFlowProps) {
   const [step, setStep] = useState<Step>("input")
   const [songs, setSongs] = useState<string[]>([])
   const [playlistId, setPlaylistId] = useState<string>("")
@@ -31,7 +35,7 @@ export default function PlaylistCreationFlow() {
             setStep("naming")  // Go to naming step instead of review
           }}
           onError={(error) => {
-            // Handle error
+            console.error('Playlist creation error:', error)
           }}
         />
       )}
@@ -50,10 +54,10 @@ export default function PlaylistCreationFlow() {
           playlistId={playlistId}
           playlistName={playlistName}
           onComplete={() => {
-            // Optional: handle completion
+            onCreatePlaylist()
           }}
           onError={(error) => {
-            // Handle error
+            console.error('Playlist creation error:', error)
           }}
         />
       )}

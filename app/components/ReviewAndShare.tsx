@@ -4,8 +4,10 @@ import { useEffect, useState } from "react"
 import { useSession } from "next-auth/react"
 import { getPlaylistUrl, getPlaylistTracks } from "@/app/utils/spotify"
 import { useDebug } from "@/app/providers/DebugProvider"
-import { Music, Clock, Share2, Copy, Check } from "lucide-react"
+import { Music, Clock, Share2, Copy, Check, Play, Pause } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import SpotifyPlayer from './SpotifyPlayer'
+import { Track } from '@/app/types/spotify'
 
 type ReviewAndShareProps = {
   playlistId: string
@@ -14,20 +16,33 @@ type ReviewAndShareProps = {
   onError: (error: string) => void
 }
 
-type Track = {
-  name: string
-  artist: string
-  album: string
-  duration: number
-  image: string
-}
-
 export default function ReviewAndShare({ playlistId, playlistName, onComplete, onError }: ReviewAndShareProps) {
   const { data: session } = useSession()
   const { addLog } = useDebug()
   const [playlistUrl, setPlaylistUrl] = useState<string>()
   const [tracks, setTracks] = useState<Track[]>([])
   const [copied, setCopied] = useState(false)
+  const [playingTrackId, setPlayingTrackId] = useState<string | null>(null)
+  const [currentTrackUri, setCurrentTrackUri] = useState<string | null>(null)
+
+  const togglePlay = async (track: Track) => {
+    addLog('Toggle play clicked', 'info', { 
+      track: {
+        id: track.id,
+        name: track.name,
+        artist: track.artist,
+        hasPreview: !!track.previewUrl 
+      }
+    })
+    
+    if (playingTrackId === track.id) {
+      setPlayingTrackId(null)
+      setCurrentTrackUri(null)
+    } else {
+      setPlayingTrackId(track.id)
+      setCurrentTrackUri(`spotify:track:${track.id}`)
+    }
+  }
 
   useEffect(() => {
     if (!session?.accessToken || !playlistId) return
@@ -38,7 +53,15 @@ export default function ReviewAndShare({ playlistId, playlistName, onComplete, o
     ])
       .then(([url, playlistTracks]) => {
         if (url) {
-          addLog('Got playlist URL', 'info', { url })
+          addLog('Got playlist details', 'info', { 
+            url,
+            trackCount: playlistTracks.length,
+            tracks: playlistTracks.map((t: Track) => ({
+              id: t.id,
+              name: t.name,
+              hasPreview: !!t.previewUrl
+            }))
+          })
           setPlaylistUrl(url)
           setTracks(playlistTracks)
           onComplete()
@@ -47,7 +70,9 @@ export default function ReviewAndShare({ playlistId, playlistName, onComplete, o
         }
       })
       .catch(error => {
-        addLog('Failed to get playlist details', 'error', { error: String(error) })
+        addLog('Failed to get playlist details', 'error', { 
+          error: error instanceof Error ? error.message : String(error)
+        })
         onError(error instanceof Error ? error.message : 'Failed to get playlist details')
       })
   }, [session?.accessToken, playlistId])
@@ -68,6 +93,20 @@ export default function ReviewAndShare({ playlistId, playlistName, onComplete, o
 
   return (
     <div className="space-y-8">
+      <SpotifyPlayer 
+        trackUri={currentTrackUri}
+        trackInfo={tracks.find(t => t.id === playingTrackId) ? {
+          name: tracks.find(t => t.id === playingTrackId)!.name,
+          artist: tracks.find(t => t.id === playingTrackId)!.artist,
+          image: tracks.find(t => t.id === playingTrackId)!.image
+        } : undefined}
+        onPlay={() => {}}
+        onPause={() => setPlayingTrackId(null)}
+        onEnded={() => {
+          setPlayingTrackId(null)
+          setCurrentTrackUri(null)
+        }}
+      />
       <div className="text-center space-y-2">
         <h2 className="text-3xl font-extrabold bg-gradient-to-br from-white to-purple-400 bg-clip-text text-transparent">
           {playlistName}
@@ -94,13 +133,31 @@ export default function ReviewAndShare({ playlistId, playlistName, onComplete, o
                   {index + 1}
                 </div>
                 <div className="min-w-0 flex items-center space-x-3">
-                  {track.image ? (
-                    <img src={track.image} alt="" className="w-10 h-10 rounded" />
-                  ) : (
-                    <div className="w-10 h-10 rounded bg-purple-300/10 flex items-center justify-center">
-                      <Music size={20} className="text-purple-300/40" />
-                    </div>
-                  )}
+                  <div className="relative group/play cursor-pointer">
+                    {track.image ? (
+                      <img src={track.image} alt="" className="w-10 h-10 rounded" />
+                    ) : (
+                      <div className="w-10 h-10 rounded bg-purple-300/10 flex items-center justify-center">
+                        <Music size={20} className="text-purple-300/40" />
+                      </div>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        togglePlay(track)
+                      }}
+                      className={`absolute inset-0 flex items-center justify-center bg-black/40 
+                        opacity-0 group-hover/play:opacity-100 transition-opacity rounded
+                        hover:bg-black/60 ${!track.previewUrl ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                      title={track.previewUrl ? 'Play preview' : 'No preview available'}
+                    >
+                      {playingTrackId === track.id ? (
+                        <Pause size={20} className="text-white" />
+                      ) : (
+                        <Play size={20} className={`text-white ${!track.previewUrl ? 'opacity-50' : ''}`} />
+                      )}
+                    </button>
+                  </div>
                   <div className="min-w-0">
                     <div className="truncate text-white">{track.name}</div>
                     <div className="truncate text-purple-300/60">{track.artist}</div>

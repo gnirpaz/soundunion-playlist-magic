@@ -12,7 +12,10 @@ const SPOTIFY_SCOPES = [
   'playlist-modify-public',
   'playlist-modify-private',
   'user-read-private',
-  'playlist-read-private'
+  'playlist-read-private',
+  'streaming',
+  'user-read-playback-state',
+  'user-modify-playback-state'
 ].join(' ')
 
 const SPOTIFY_AUTH_URL = 
