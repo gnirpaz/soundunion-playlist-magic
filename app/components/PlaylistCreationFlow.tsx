@@ -1,12 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import SongInput from "./SongInput"
 import ProcessingStep from "./ProcessingStep"
-import PlaylistNameInput from "./PlaylistNameInput"
 import ReviewAndShare from "./ReviewAndShare"
 
-type Step = "input" | "processing" | "naming" | "review"
+type Step = "input" | "processing" | "review"
 
 type PlaylistCreationFlowProps = {
   onCreatePlaylist: () => void
@@ -15,8 +14,14 @@ type PlaylistCreationFlowProps = {
 export default function PlaylistCreationFlow({ onCreatePlaylist }: PlaylistCreationFlowProps) {
   const [step, setStep] = useState<Step>("input")
   const [songs, setSongs] = useState<string[]>([])
-  const [playlistId, setPlaylistId] = useState<string>("")
-  const [playlistName, setPlaylistName] = useState<string>("")
+  const [currentPlaylistId, setCurrentPlaylistId] = useState<string | null>(null)
+
+  // Only reset songs when starting from input step
+  useEffect(() => {
+    if (step === "input") {
+      setSongs([])
+    }
+  }, [step])
 
   return (
     <div className="w-full max-w-2xl mx-auto">
@@ -30,34 +35,26 @@ export default function PlaylistCreationFlow({ onCreatePlaylist }: PlaylistCreat
       {step === "processing" && (
         <ProcessingStep
           songs={songs}
-          onComplete={(tracks) => {
-            setPlaylistId(tracks[0])
-            setStep("naming")  // Go to naming step instead of review
-          }}
-          onError={(error) => {
-            console.error('Playlist creation error:', error)
-          }}
-        />
-      )}
-
-      {step === "naming" && (
-        <PlaylistNameInput
-          onSubmit={(name) => {
-            setPlaylistName(name)
+          onComplete={(playlistId) => {
+            setCurrentPlaylistId(playlistId)
             setStep("review")
           }}
+          onError={(error) => {
+            console.error('Playlist creation error:', error)
+            setStep("input")
+          }}
         />
       )}
 
-      {step === "review" && (
+      {step === "review" && currentPlaylistId && (
         <ReviewAndShare
-          playlistId={playlistId}
-          playlistName={playlistName}
+          playlistId={currentPlaylistId}
           onComplete={() => {
             onCreatePlaylist()
+            setStep("input")
           }}
           onError={(error) => {
-            console.error('Playlist creation error:', error)
+            console.error('Review error:', error)
           }}
         />
       )}

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 
 type ProcessingStepProps = {
   songs: string[]
-  onComplete: (tracks: string[]) => void
+  onComplete: (playlistId: string) => void
   onError: (error: string) => void
 }
 
@@ -24,24 +24,15 @@ export default function ProcessingStep({ songs, onComplete, onError }: Processin
       try {
         await createPlaylist(token, 'My Playlist', songs, addLog)
           .then(result => {
-            onComplete([result.playlistId])
+            onComplete(result.playlistId)
           })
           .catch(async error => {
             if (error.message?.includes('token expired')) {
               await updateSession()
-              const newSession = await new Promise(resolve => {
-                const checkSession = setInterval(async () => {
-                  const session = await getSession()
-                  if (session?.accessToken) {
-                    clearInterval(checkSession)
-                    resolve(session)
-                  }
-                }, 500)
-              })
-              
+              const newSession = await getSession()
               if (newSession?.accessToken) {
                 return createPlaylist(newSession.accessToken, 'My Playlist', songs, addLog)
-                  .then(result => onComplete([result.playlistId]))
+                  .then(result => onComplete(result.playlistId))
               }
             }
             onError(error.message || 'An error occurred')
@@ -52,7 +43,7 @@ export default function ProcessingStep({ songs, onComplete, onError }: Processin
     }
 
     processWithRetry()
-  }, [session?.accessToken, songs, addLog, updateSession])
+  }, [session?.accessToken, songs])
 
   if (session === null) {
     return (
