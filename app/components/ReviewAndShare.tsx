@@ -11,7 +11,8 @@ import { Track } from '@/app/types/spotify'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 type ReviewAndShareProps = {
-  playlistId: string  
+  playlistId: string
+  onComplete: () => void
   onError: (error: string) => void
 }
 

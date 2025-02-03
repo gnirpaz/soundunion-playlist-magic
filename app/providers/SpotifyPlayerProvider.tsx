@@ -58,10 +58,14 @@ export function SpotifyPlayerProvider({ children }: { children: React.ReactNode 
       setIsReady(true)
     })
 
-    player.connect().then(success => {
+    player.connect().then((success: boolean) => {
       addLog('Player connected', 'info', { success })
       if (success) setPlayer(player)
     })
+
+    return () => {
+      player.disconnect()
+    }
   }
 
   useEffect(() => {
@@ -72,10 +76,26 @@ export function SpotifyPlayerProvider({ children }: { children: React.ReactNode 
     isReady,
     deviceId,
     play: async (uri: string) => {
-      // Play implementation
+      if (!player || !deviceId) return
+      await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${session?.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          uris: [uri]
+        })
+      })
     },
     pause: async () => {
-      // Pause implementation
+      if (!player || !deviceId) return
+      await fetch('https://api.spotify.com/v1/me/player/pause', {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${session?.accessToken}`,
+        }
+      })
     }
   }
 

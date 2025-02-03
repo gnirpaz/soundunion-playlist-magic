@@ -1,6 +1,5 @@
 "use client"
 
-import { useRouter } from "next/navigation"
 import ReviewAndShare from "@/app/components/ReviewAndShare"
 
 
@@ -10,8 +9,7 @@ type Props = {
   }
 }
 
-export default function PlaylistPage({ params }: Props) {
-  const router = useRouter()
+export default function PlaylistPage({ params }: Props) {  
   const playlistId = params.id
 
   return (
@@ -19,6 +17,7 @@ export default function PlaylistPage({ params }: Props) {
       <div className="w-full max-w-2xl mx-auto">
         <ReviewAndShare
           playlistId={playlistId}          
+          onComplete={() => {}}
           onError={(error) => {
             console.error('Review error:', error)
           }}
