@@ -71,12 +71,25 @@ export default function SpotifyPlayer({ trackUri, trackInfo, onPlay, onPause, on
       setIsReady(false)
     })
 
+    // Add state listener for track end
+    player.addListener('player_state_changed', state => {
+      if (state?.track_window?.previous_tracks.length && 
+          !state?.track_window?.next_tracks.length && 
+          !state?.track_window?.current_track) {
+        onEnded?.()
+      }
+    })
+
     player.connect().then(success => {
       addLog('Player connection attempt', 'info', { success })
       if (success) {
         setPlayer(player)
       }
     })
+
+    return () => {
+      player.disconnect()
+    }
   }, [session?.accessToken])
 
   useEffect(() => {
@@ -169,10 +182,30 @@ export default function SpotifyPlayer({ trackUri, trackInfo, onPlay, onPause, on
                 <button 
                   className="p-2 bg-white rounded-full hover:scale-105 transition-transform"
                   onClick={() => {
+                    if (!player || !deviceId || !session?.accessToken) return;
+                    
                     if (isPlaying) {
-                      onPause?.()
+                      fetch('https://api.spotify.com/v1/me/player/pause', {
+                        method: 'PUT',
+                        headers: {
+                          'Authorization': `Bearer ${session.accessToken}`,
+                        }
+                      }).then(() => {
+                        setIsPlaying(false);
+                        onPause?.();
+                      });
                     } else if (trackUri) {
-                      onPlay?.()
+                      fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+                        method: 'PUT',
+                        headers: {
+                          'Authorization': `Bearer ${session.accessToken}`,
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ uris: [trackUri] })
+                      }).then(() => {
+                        setIsPlaying(true);
+                        onPlay?.();
+                      });
                     }
                   }}
                 >

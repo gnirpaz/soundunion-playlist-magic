@@ -97,38 +97,7 @@ export async function createPlaylist(
     throw new Error('No tracks found')
   }
 
-  // Check for recent playlist to avoid duplication
-  try {
-    const existingPlaylistId = await findRecentPlaylist(accessToken)
-    if (existingPlaylistId) {
-      logger('Found existing playlist', 'info', { playlistId: existingPlaylistId })
-      
-      // Add tracks to existing playlist
-      const addTracksResponse = await fetch(`https://api.spotify.com/v1/playlists/${existingPlaylistId}/tracks`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ uris: foundTracks })
-      })
-
-      if (!addTracksResponse.ok) {
-        throw new Error('Failed to add tracks to existing playlist')
-      }
-
-      return { 
-        playlistId: existingPlaylistId,
-        trackIds: foundTracks.map(uri => uri.split(':')[2])
-      }
-    }
-  } catch (error) {
-    logger('Error checking existing playlist', 'error', { error: String(error) })
-    // Continue with creating new playlist if check fails
-  }
-
-  // Create new playlist only if no recent playlist exists
-  // 2. Create playlist
+  // 1. Create playlist
   logger('Creating playlist', 'info', { trackCount: foundTracks.length })
   const userId = await getCurrentUserId(accessToken)
   const createResponse = await fetch(`https://api.spotify.com/v1/users/${userId}/playlists`, {

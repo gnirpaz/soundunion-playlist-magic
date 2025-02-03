@@ -10,7 +10,7 @@ export default function PlaylistResult({ link }: PlaylistResultProps) {
         Your playlist has been created successfully. You can now open it in Spotify and start listening!
       </p>
       <p>
-        Here's your Spotify playlist link:{" "}
+        Here&apos;s your Spotify playlist link:{" "}
         <a href={link} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
           {link}
         </a>
