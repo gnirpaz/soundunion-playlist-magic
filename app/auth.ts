@@ -30,7 +30,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
     authorization: SPOTIFY_AUTH_URL
   })],
-  debug: true,
+  // debug: true,
   callbacks: {
     async jwt({ token, account }) {
       console.log('JWT Callback:', { token, account })
