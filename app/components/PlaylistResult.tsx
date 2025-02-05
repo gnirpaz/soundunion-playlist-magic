@@ -35,6 +35,11 @@ export default function PlaylistResult({ link, name, tracks }: PlaylistResultPro
   return (
     <div className="rounded-2xl bg-black/50 border border-purple-500/10 shadow-[0_0_15px_rgba(168,85,247,0.15)] overflow-hidden">
       <div className="p-8 space-y-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold text-purple-100">{name}</h1>
+          <p className="text-purple-300">Ready to share with the world</p>
+        </div>
+
         <div className="mt-4 p-4 bg-green-100 rounded-lg">
           <h2 className="text-xl font-bold mb-2 text-green-800">Your Playlist is Ready!</h2>
           <p className="mb-4">
