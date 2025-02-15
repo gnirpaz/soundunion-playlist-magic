@@ -52,14 +52,22 @@ export default function ReviewAndShare({ playlistId, onError }: ReviewAndSharePr
 
   // Handle playlist naming
   const handleNameSubmit = async () => {
-    if (!session?.accessToken || !playlistName.trim()) return
+    if (!session?.accessToken || !playlistName.trim() || !playlistId) return
 
     try {
       await renamePlaylist(session.accessToken, playlistId, playlistName.trim())
-      addLog('Updated playlist name', 'info', { playlistId, name: playlistName })
-      setShowNameDialog(false)      
+      addLog('Renamed playlist', 'info', { 
+        playlistId,
+        oldName: 'New Playlist (Untitled)',
+        newName: playlistName.trim() 
+      })
+      setShowNameDialog(false)
+      // Refresh playlist details to show new name
+      const details = await getPlaylistDetails(session.accessToken, playlistId)
+      setPlaylistName(details.name)
+      setPlaylistUrl(details.url)
     } catch (error) {
-      addLog('Failed to update playlist name', 'error', { 
+      addLog('Failed to rename playlist', 'error', { 
         error: error instanceof Error ? error.message : String(error)
       })
       setShowNameDialog(false)

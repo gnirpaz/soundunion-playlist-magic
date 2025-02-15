@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { useSession, signIn, getSession } from "next-auth/react"
 import { createPlaylist } from "@/app/utils/spotify"
 import { useDebug } from "@/app/providers/DebugProvider"
@@ -15,34 +15,56 @@ type ProcessingStepProps = {
 export default function ProcessingStep({ songs, onComplete, onError }: ProcessingStepProps) {
   const { data: session, update: updateSession } = useSession()
   const { addLog } = useDebug()
+  const isProcessing = useRef(false)
+  const hasCompleted = useRef(false)
 
   useEffect(() => {
-    if (!session?.accessToken || !songs.length) return
+    if (!session?.accessToken || !songs.length || isProcessing.current || hasCompleted.current) return
+    
     const token = session.accessToken
 
     async function processWithRetry() {
+      if (isProcessing.current || hasCompleted.current) return
+      isProcessing.current = true
+      
       try {
-        await createPlaylist(token, 'My Playlist', songs, addLog)
+        await createPlaylist(token, 'New Playlist (Untitled)', songs, addLog)
           .then(result => {
+            hasCompleted.current = true
             onComplete(result.playlistId)
           })
           .catch(async error => {
+            if (error.message === 'Playlist creation already in progress') {
+              return
+            }
             if (error.message?.includes('token expired')) {
               await updateSession()
               const newSession = await getSession()
               if (newSession?.accessToken) {
-                return createPlaylist(newSession.accessToken, 'My Playlist', songs, addLog)
-                  .then(result => onComplete(result.playlistId))
+                return createPlaylist(newSession.accessToken, 'New Playlist (Untitled)', songs, addLog)
+                  .then(result => {
+                    hasCompleted.current = true
+                    onComplete(result.playlistId)
+                  })
               }
             }
             onError(error.message || 'An error occurred')
           })
       } catch (error) {
+        if (error instanceof Error && error.message === 'Playlist creation already in progress') {
+          return
+        }
         onError(error instanceof Error ? error.message : 'An error occurred')
+      } finally {
+        isProcessing.current = false
       }
     }
 
     processWithRetry()
+    
+    return () => {
+      isProcessing.current = false
+    }
   }, [session?.accessToken, songs])
 
   if (session === null) {

@@ -60,89 +60,105 @@ export async function searchTrack(accessToken: string, artist: string, title: st
 
 type LoggerFunction = (type: string, level: 'info' | 'error', data: Record<string, unknown>) => void
 
+// Add a Set to track playlist creation requests
+const playlistCreationRequests = new Set<string>()
+
 export async function createPlaylist(
   accessToken: string, 
   name: string, 
   songs: string[],
   logger: LoggerFunction
 ) {
-  if (!accessToken) throw new Error('No access token provided')
-  if (!songs.length) throw new Error('No songs provided')
-
-  logger('Starting playlist creation', 'info', { totalSongs: songs.length })
-
-  // 1. Search and collect tracks
-  const foundTracks: string[] = []
+  // Create a unique key for this request
+  const requestKey = `${accessToken}-${songs.join(',')}`
   
-  for (const song of songs) {
-    logger('Searching', 'info', { song })
-    try {
-      const track = await searchSpotify(song, accessToken)
-      if (track) {
-        foundTracks.push(`spotify:track:${track.id}`)
-        logger('Track found', 'info', {
-          song,
-          track: track.name,
-          artist: track.artists[0].name
-        })
-      } else {
-        logger('Track not found', 'error', { song })
+  if (playlistCreationRequests.has(requestKey)) {
+    logger('Duplicate playlist creation prevented', 'info', { name })
+    throw new Error('Playlist creation already in progress')
+  }
+
+  try {
+    playlistCreationRequests.add(requestKey)
+    logger('Starting playlist creation', 'info', { totalSongs: songs.length })
+
+    if (!accessToken) throw new Error('No access token provided')
+    if (!songs.length) throw new Error('No songs provided')
+
+    // 1. Search and collect tracks
+    const foundTracks: string[] = []
+    
+    for (const song of songs) {
+      logger('Searching', 'info', { song })
+      try {
+        const track = await searchSpotify(song, accessToken)
+        if (track) {
+          foundTracks.push(`spotify:track:${track.id}`)
+          logger('Track found', 'info', {
+            song,
+            track: track.name,
+            artist: track.artists[0].name
+          })
+        } else {
+          logger('Track not found', 'error', { song })
+        }
+      } catch (error) {
+        logger('Search failed', 'error', { song, error: String(error) })
       }
-    } catch (error) {
-      logger('Search failed', 'error', { song, error: String(error) })
     }
-  }
 
-  if (!foundTracks.length) {
-    throw new Error('No tracks found')
-  }
+    if (!foundTracks.length) {
+      throw new Error('No tracks found')
+    }
 
-  // 1. Create playlist
-  logger('Creating playlist', 'info', { trackCount: foundTracks.length })
-  const userId = await getCurrentUserId(accessToken)
-  const createResponse = await fetch(`https://api.spotify.com/v1/users/${userId}/playlists`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      name: name || 'My Generated Playlist',
-      description: 'Created with Playlist Creator',
-      public: false
+    // 1. Create playlist
+    logger('Creating playlist', 'info', { trackCount: foundTracks.length })
+    const userId = await getCurrentUserId(accessToken)
+    const createResponse = await fetch(`https://api.spotify.com/v1/users/${userId}/playlists`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        name: name || 'My Generated Playlist',
+        description: 'Created with Playlist Creator',
+        public: false
+      })
     })
-  })
 
-  if (!createResponse.ok) {
-    const error = await createResponse.json().catch(() => ({}))
-    throw new Error(error.error?.message || 'Failed to create playlist')
-  }
+    if (!createResponse.ok) {
+      const error = await createResponse.json().catch(() => ({}))
+      throw new Error(error.error?.message || 'Failed to create playlist')
+    }
 
-  const playlist = await createResponse.json()
+    const playlist = await createResponse.json()
 
-  // 3. Add tracks
-  const addTracksResponse = await fetch(`https://api.spotify.com/v1/playlists/${playlist.id}/tracks`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ uris: foundTracks })
-  })
+    // 3. Add tracks
+    const addTracksResponse = await fetch(`https://api.spotify.com/v1/playlists/${playlist.id}/tracks`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ uris: foundTracks })
+    })
 
-  if (!addTracksResponse.ok) {
-    const error = await addTracksResponse.json().catch(() => ({}))
-    throw new Error(error.error?.message || 'Failed to add tracks to playlist')
-  }
+    if (!addTracksResponse.ok) {
+      const error = await addTracksResponse.json().catch(() => ({}))
+      throw new Error(error.error?.message || 'Failed to add tracks to playlist')
+    }
 
-  logger('Playlist created', 'info', { 
-    playlistId: playlist.id,
-    tracks: foundTracks.length
-  })
+    logger('Playlist created', 'info', { 
+      playlistId: playlist.id,
+      tracks: foundTracks.length
+    })
 
-  return { 
-    playlistId: playlist.id,
-    trackIds: foundTracks.map(uri => uri.split(':')[2])
+    return { 
+      playlistId: playlist.id,
+      trackIds: foundTracks.map(uri => uri.split(':')[2])
+    }
+  } finally {
+    playlistCreationRequests.delete(requestKey)
   }
 }
 
