@@ -14,28 +14,26 @@ export default function NewPlaylist() {
   const router = useRouter()
 
   return (
-    
-      <div className="w-full max-w-2xl mx-auto">
-        {step === "input" && (
-          <SongInput onSubmit={(songs) => {
-            setSongs(songs)
-            setStep("processing")
-          }}/>
-        )}
+    <div className="w-full max-w-2xl mx-auto">
+      {step === "input" && (
+        <SongInput onSubmit={(songs) => {
+          setSongs(songs)
+          setStep("processing")
+        }}/>
+      )}
 
-        {step === "processing" && (
-          <ProcessingStep
-            songs={songs}
-            onComplete={(playlistId) => {
-              router.push(`/playlist/${playlistId}`)
-            }}
-            onError={(error) => {
-              console.error('Playlist creation error:', error)
-              setStep("input")
-            }}
-          />
-        )}
-      </div>
-    
+      {step === "processing" && (
+        <ProcessingStep
+          songs={songs}
+          onComplete={(playlistId) => {
+            router.push(`/playlist/${playlistId}`)
+          }}
+          onError={(error) => {
+            console.error('Playlist creation error:', error)
+            setStep("input")
+          }}
+        />
+      )}
+    </div>
   )
 } 

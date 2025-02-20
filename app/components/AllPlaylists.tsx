@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
 import { Search } from "lucide-react"
 import { Input } from "@/components/ui/input"
+import RenamePlaylistDialog from "@/components/RenamePlaylistDialog"
 
 interface Playlist {
   id: string
@@ -21,6 +22,7 @@ export default function AllPlaylists() {
 
   const [playlists, setPlaylists] = useState<Playlist[]>(initialPlaylists)
   const [searchTerm, setSearchTerm] = useState("")
+  const [renamingPlaylist, setRenamingPlaylist] = useState<string | null>(null)
 
   useEffect(() => {
     const filteredPlaylists = initialPlaylists.filter((playlist) =>
@@ -28,6 +30,14 @@ export default function AllPlaylists() {
     )
     setPlaylists(filteredPlaylists)
   }, [searchTerm])
+
+  const handleRename = (playlistId: string, newName: string) => {
+    setPlaylists(playlists.map(playlist => 
+      playlist.id === playlistId 
+        ? { ...playlist, name: newName }
+        : playlist
+    ))
+  }
 
   return (
     <div className="space-y-8">
@@ -68,6 +78,15 @@ export default function AllPlaylists() {
           </div>
         ))}
       </div>
+
+      {renamingPlaylist && (
+        <RenamePlaylistDialog
+          playlistId={renamingPlaylist}
+          currentName={playlists.find(p => p.id === renamingPlaylist)?.name || ''}
+          onClose={() => setRenamingPlaylist(null)}
+          onRename={(newName) => handleRename(renamingPlaylist, newName)}
+        />
+      )}
     </div>
   )
 }
