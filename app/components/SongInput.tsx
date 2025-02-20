@@ -25,8 +25,7 @@ export default function SongInput({ onSubmit }: SongInputProps) {
     setInput("")
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = () => {
     const songs = songList
       .split("\n")
       .map(song => song.trim())
