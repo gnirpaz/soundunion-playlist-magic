@@ -51,7 +51,7 @@ export async function createSpotifyPlaylist(name: string, songs: string[]) {
   })
   const user = await userResponse.json()
 
-  // Create playlist
+  // Create playlist with name and description immediately
   const playlistResponse = await fetch(
     `https://api.spotify.com/v1/users/${user.id}/playlists`,
     {
@@ -62,11 +62,17 @@ export async function createSpotifyPlaylist(name: string, songs: string[]) {
       },
       body: JSON.stringify({
         name,
-        public: true,
-        description: 'Created with Spotify Playlist Creator'
+        description: 'Created with Spotify Playlist Creator',
+        public: true
       })
     }
   )
+
+  if (!playlistResponse.ok) {
+    const error = await playlistResponse.json()
+    throw new Error(`Failed to create playlist: ${error.error?.message || playlistResponse.statusText}`)
+  }
+
   const playlist = await playlistResponse.json()
 
   // Search and add tracks
@@ -78,25 +84,32 @@ export async function createSpotifyPlaylist(name: string, songs: string[]) {
   }
 
   // Add tracks in batches
-  for (let i = 0; i < trackIds.length; i += 100) {
-    const batch = trackIds.slice(i, i + 100)
-    await fetch(
-      `https://api.spotify.com/v1/playlists/${playlist.id}/tracks`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          uris: batch.map(id => `spotify:track:${id}`)
-        })
+  if (trackIds.length > 0) {
+    for (let i = 0; i < trackIds.length; i += 100) {
+      const batch = trackIds.slice(i, i + 100)
+      const addTracksResponse = await fetch(
+        `https://api.spotify.com/v1/playlists/${playlist.id}/tracks`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            uris: batch.map(id => `spotify:track:${id}`)
+          })
+        }
+      )
+
+      if (!addTracksResponse.ok) {
+        console.error('Failed to add tracks:', await addTracksResponse.json())
       }
-    )
+    }
   }
 
   return {
     playlistId: playlist.id,
+    playlistName: name,
     tracksFound: trackIds.length,
     totalTracks: songs.length
   }

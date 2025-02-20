@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useSession, signIn, getSession } from "next-auth/react"
 import { createPlaylist } from "@/app/utils/spotify"
 import { useDebug } from "@/app/providers/DebugProvider"
@@ -17,6 +17,7 @@ export default function ProcessingStep({ songs, onComplete, onError }: Processin
   const { addLog } = useDebug()
   const isProcessing = useRef(false)
   const hasCompleted = useRef(false)
+  const [status, setStatus] = useState<'creating'|'adding'|'complete'>('creating')
 
   useEffect(() => {
     if (!session?.accessToken || !songs.length || isProcessing.current || hasCompleted.current) return
@@ -28,32 +29,12 @@ export default function ProcessingStep({ songs, onComplete, onError }: Processin
       isProcessing.current = true
       
       try {
-        await createPlaylist(token, 'New Playlist (Untitled)', songs, addLog)
-          .then(result => {
-            hasCompleted.current = true
-            onComplete(result.playlistId)
-          })
-          .catch(async error => {
-            if (error.message === 'Playlist creation already in progress') {
-              return
-            }
-            if (error.message?.includes('token expired')) {
-              await updateSession()
-              const newSession = await getSession()
-              if (newSession?.accessToken) {
-                return createPlaylist(newSession.accessToken, 'New Playlist (Untitled)', songs, addLog)
-                  .then(result => {
-                    hasCompleted.current = true
-                    onComplete(result.playlistId)
-                  })
-              }
-            }
-            onError(error.message || 'An error occurred')
-          })
+        setStatus('creating')
+        const result = await createPlaylist(token, 'New Playlist (Untitled)', songs, addLog)
+        setStatus('complete')
+        onComplete(result.playlistId)
       } catch (error) {
-        if (error instanceof Error && error.message === 'Playlist creation already in progress') {
-          return
-        }
+        console.error('Creation failed:', error)
         onError(error instanceof Error ? error.message : 'An error occurred')
       } finally {
         isProcessing.current = false

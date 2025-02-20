@@ -111,7 +111,7 @@ export async function createPlaylist(
     }
 
     // 1. Create playlist
-    logger('Creating playlist', 'info', { trackCount: foundTracks.length })
+    logger('Creating playlist', 'info', { name, trackCount: foundTracks.length })
     const userId = await getCurrentUserId(accessToken)
     const createResponse = await fetch(`https://api.spotify.com/v1/users/${userId}/playlists`, {
       method: 'POST',
@@ -121,7 +121,7 @@ export async function createPlaylist(
       },
       body: JSON.stringify({
         name: name || 'My Generated Playlist',
-        description: 'Created with Playlist Creator',
+        description: 'Created with Playlist AI',
         public: false
       })
     })
@@ -132,6 +132,23 @@ export async function createPlaylist(
     }
 
     const playlist = await createResponse.json()
+
+    // Verify playlist was created with correct name
+    const verifyResponse = await fetch(`https://api.spotify.com/v1/playlists/${playlist.id}`, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      }
+    })
+
+    if (!verifyResponse.ok) {
+      throw new Error('Failed to verify playlist creation')
+    }
+
+    const verifiedPlaylist = await verifyResponse.json()
+    if (verifiedPlaylist.name !== name) {
+      // If name doesn't match, try to rename it
+      await renamePlaylist(accessToken, playlist.id, name)
+    }
 
     // 3. Add tracks
     const addTracksResponse = await fetch(`https://api.spotify.com/v1/playlists/${playlist.id}/tracks`, {
@@ -264,11 +281,33 @@ export async function renamePlaylist(accessToken: string, playlistId: string, na
       'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ name })
+    body: JSON.stringify({
+      name,
+      description: 'Created with Playlist AI',
+      public: false
+    })
   })
 
   if (!response.ok) {
-    throw new Error('Failed to update playlist name')
+    const error = await response.json().catch(() => ({}))
+    console.error('Playlist rename error:', error)
+    throw new Error(error.error?.message || 'Failed to rename playlist')
+  }
+
+  // Verify the change
+  const verifyResponse = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}`, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`
+    }
+  })
+
+  if (!verifyResponse.ok) {
+    throw new Error('Failed to verify playlist rename')
+  }
+
+  const playlist = await verifyResponse.json()
+  if (playlist.name !== name) {
+    throw new Error('Playlist name was not updated')
   }
 }
 
