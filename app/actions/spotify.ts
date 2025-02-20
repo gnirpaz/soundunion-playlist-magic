@@ -7,6 +7,22 @@ type SpotifyTrack = {
   id: string
 }
 
+interface SpotifyTrackItem {
+  id: string
+  name: string
+  artists: Array<{ name: string }>
+  album: {
+    name: string
+    images: Array<{ url: string }>
+  }
+}
+
+interface SpotifySearchResponse {
+  tracks: {
+    items: SpotifyTrackItem[]
+  }
+}
+
 async function searchTrack(accessToken: string, artist: string, title: string) {
   const cleanTitle = cleanSongTitle(title)
   const queries = [
@@ -100,4 +116,53 @@ export async function createSpotifyPlaylist(name: string, songs: string[]) {
     tracksFound: trackIds.length,
     totalTracks: songs.length
   }
+}
+
+// Add this function to handle Spotify search
+export async function searchSpotifyTracks(query: string) {
+  if (!query) return []
+
+  try {
+    const response = await fetch(
+      `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=5`,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.SPOTIFY_ACCESS_TOKEN}`,
+        },
+      }
+    )
+
+    const data = await response.json()
+    // @ts-expect-error Spotify API types don't match exactly but runtime works correctly
+    return data.tracks.items.map((track) => ({
+      id: track.id,
+      title: track.name,
+      artist: track.artists[0].name,
+      albumArt: track.album.images[0]?.url || '/placeholder.svg'
+    }))
+  } catch (error) {
+    console.error('Failed to search Spotify:', error)
+    return []
+  }
+}
+
+export async function searchSpotify(query: string, accessToken: string): Promise<SpotifyTrackItem | null> {
+  if (!accessToken) {
+    throw new Error('No access token provided')
+  }
+
+  const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=1`
+  const response = await fetch(url, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`
+    }
+  })
+  
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.error?.message || `Search failed: ${response.status}`)
+  }
+  
+  const data = await response.json() as SpotifySearchResponse
+  return data.tracks?.items[0] || null
 } 

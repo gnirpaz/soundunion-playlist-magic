@@ -177,6 +177,23 @@ async function getCurrentUserId(accessToken: string) {
   return data.id
 }
 
+interface SpotifyTrackItem {
+  id: string
+  name: string
+  artists: Array<{ name: string }>
+  album: {
+    name: string
+    images: Array<{ url: string }>
+  }
+}
+
+interface SpotifySearchResponse {
+  tracks: {
+    items: SpotifyTrackItem[]
+  }
+}
+
+// Update the search function with proper types
 export async function searchSpotify(query: string, accessToken: string) {
   if (!accessToken) {
     throw new Error('No access token provided')
@@ -194,7 +211,7 @@ export async function searchSpotify(query: string, accessToken: string) {
     throw new Error(error.error?.message || `Search failed: ${response.status}`)
   }
   
-  const data = await response.json()
+  const data = await response.json() as SpotifySearchResponse
   return data.tracks?.items[0] || null
 }
 
