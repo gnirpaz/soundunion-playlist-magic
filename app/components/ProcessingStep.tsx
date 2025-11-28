@@ -1,14 +1,15 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useSession, signIn, getSession } from "next-auth/react"
-import { createPlaylist } from "@/app/utils/spotify"
+import { createPlaylist, CreatePlaylistResult } from "@/app/utils/spotify"
 import { useDebug } from "@/app/providers/DebugProvider"
 import { Button } from "@/components/ui/button"
+import { AlertTriangle } from "lucide-react"
 
 type ProcessingStepProps = {
   songs: string[]
-  onComplete: (playlistId: string) => void
+  onComplete: (playlistId: string, notFoundSongs?: string[]) => void
   onError: (error: string) => void
 }
 
@@ -17,6 +18,8 @@ export default function ProcessingStep({ songs, onComplete, onError }: Processin
   const { addLog } = useDebug()
   const isProcessing = useRef(false)
   const hasCompleted = useRef(false)
+  const [processingStatus, setProcessingStatus] = useState<string>('Initializing...')
+  const [processedCount, setProcessedCount] = useState(0)
 
   useEffect(() => {
     if (!session?.accessToken || !songs.length || isProcessing.current || hasCompleted.current) return
@@ -26,26 +29,40 @@ export default function ProcessingStep({ songs, onComplete, onError }: Processin
     async function processWithRetry() {
       if (isProcessing.current || hasCompleted.current) return
       isProcessing.current = true
+      setProcessingStatus('Searching for tracks...')
+      
+      // Create a wrapper logger that also updates UI
+      const uiLogger = (message: string, type: 'info' | 'error', data?: Record<string, unknown>) => {
+        addLog(message, type, data)
+        if (message === 'Searching') {
+          setProcessedCount(prev => prev + 1)
+          setProcessingStatus(`Searching track ${processedCount + 1} of ${songs.length}...`)
+        } else if (message === 'Creating playlist') {
+          setProcessingStatus('Creating playlist...')
+        } else if (message === 'Playlist created') {
+          setProcessingStatus('Done!')
+        }
+      }
       
       try {
-        await createPlaylist(token, 'New Playlist (Untitled)', songs, addLog)
-          .then(result => {
-            hasCompleted.current = true
-            onComplete(result.playlistId)
-          })
+        const handleResult = (result: CreatePlaylistResult) => {
+          hasCompleted.current = true
+          onComplete(result.playlistId, result.notFoundSongs)
+        }
+
+        await createPlaylist(token, 'New Playlist (Untitled)', songs, uiLogger)
+          .then(handleResult)
           .catch(async error => {
             if (error.message === 'Playlist creation already in progress') {
               return
             }
             if (error.message?.includes('token expired')) {
+              setProcessingStatus('Refreshing session...')
               await updateSession()
               const newSession = await getSession()
               if (newSession?.accessToken) {
-                return createPlaylist(newSession.accessToken, 'New Playlist (Untitled)', songs, addLog)
-                  .then(result => {
-                    hasCompleted.current = true
-                    onComplete(result.playlistId)
-                  })
+                return createPlaylist(newSession.accessToken, 'New Playlist (Untitled)', songs, uiLogger)
+                  .then(handleResult)
               }
             }
             onError(error.message || 'An error occurred')
@@ -69,7 +86,10 @@ export default function ProcessingStep({ songs, onComplete, onError }: Processin
 
   if (session === null) {
     return (
-      <div className="text-center space-y-6">
+      <div className="text-center space-y-6 p-8">
+        <div className="w-16 h-16 mx-auto bg-yellow-500/10 rounded-full flex items-center justify-center mb-4">
+          <AlertTriangle size={32} className="text-yellow-400" />
+        </div>
         <div className="space-y-2">
           <h2 className="text-3xl font-extrabold bg-gradient-to-br from-white to-purple-400 bg-clip-text text-transparent">
             Connect with Spotify
@@ -88,8 +108,10 @@ export default function ProcessingStep({ songs, onComplete, onError }: Processin
     )
   }
 
+  const progress = songs.length > 0 ? (processedCount / songs.length) * 100 : 0
+
   return (
-    <div className="text-center py-12">
+    <div className="text-center py-12 px-8">
       <div className="text-center space-y-2 mb-8">
         <h2 className="text-3xl font-extrabold bg-gradient-to-br from-white to-purple-400 bg-clip-text text-transparent">
           Processing Tracks
@@ -124,8 +146,20 @@ export default function ProcessingStep({ songs, onComplete, onError }: Processin
         </div>
       </div>
 
-      <p className="text-lg text-purple-300/60 animate-pulse">Creating your playlist...</p>
+      {/* Progress bar */}
+      <div className="w-full max-w-xs mx-auto mb-4">
+        <div className="h-1 bg-purple-900/50 rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-gradient-to-r from-purple-500 to-fuchsia-500 rounded-full transition-all duration-300"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+
+      <p className="text-lg text-purple-300/60">{processingStatus}</p>
+      <p className="text-sm text-purple-300/40 mt-2">
+        {processedCount} of {songs.length} tracks processed
+      </p>
     </div>
   )
 }
-

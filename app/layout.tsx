@@ -1,18 +1,26 @@
 "use client"
 
-import { Inter } from "next/font/google"
+import { Space_Grotesk, Outfit } from "next/font/google"
 import "./globals.css"
 import { SessionProvider } from "next-auth/react"
 import { DebugProvider } from "@/app/providers/DebugProvider"
 import { SpotifyPlayerProvider } from '@/app/providers/SpotifyPlayerProvider'
 import LayoutContent from "@/app/components/LayoutContent"
 
-const inter = Inter({ subsets: ["latin"] })
+const spaceGrotesk = Space_Grotesk({ 
+  subsets: ["latin"],
+  variable: "--font-display"
+})
+
+const outfit = Outfit({ 
+  subsets: ["latin"],
+  variable: "--font-body"
+})
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className={inter.className}>
+    <html lang="en" className={`${spaceGrotesk.variable} ${outfit.variable}`}>
+      <body className="font-body">
         <DebugProvider>
           <SessionProvider>
             <SpotifyPlayerProvider>

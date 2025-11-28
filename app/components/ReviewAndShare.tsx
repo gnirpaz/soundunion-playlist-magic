@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useSession } from "next-auth/react"
 import { renamePlaylist, getPlaylistDetails } from "@/app/utils/spotify"
 import { useDebug } from "@/app/providers/DebugProvider"
-import { Music, Clock, Share2, Copy, Check, Play, Pause, Pencil } from "lucide-react"
+import { Music, Clock, Share2, Copy, Check, Play, Pause, Pencil, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import SpotifyPlayer from './SpotifyPlayer'
 import { Track } from '@/app/types/spotify'
@@ -26,6 +26,21 @@ export default function ReviewAndShare({ playlistId, onError }: ReviewAndSharePr
   const [currentTrackUri, setCurrentTrackUri] = useState<string | null>(null)
   const [showNameDialog, setShowNameDialog] = useState(true)
   const [playlistName, setPlaylistName] = useState("")
+  const [notFoundSongs, setNotFoundSongs] = useState<string[]>([])
+  const [showNotFound, setShowNotFound] = useState(false)
+
+  // Load notFoundSongs from session storage
+  useEffect(() => {
+    const stored = sessionStorage.getItem(`playlist-${playlistId}-notfound`)
+    if (stored) {
+      try {
+        setNotFoundSongs(JSON.parse(stored))
+        sessionStorage.removeItem(`playlist-${playlistId}-notfound`)
+      } catch {
+        // Ignore parsing errors
+      }
+    }
+  }, [playlistId])
 
   // Load initial playlist details
   useEffect(() => {
@@ -166,6 +181,40 @@ export default function ReviewAndShare({ playlistId, onError }: ReviewAndSharePr
           </div>
           <p className="text-purple-300/60 font-light">Ready to share with the world</p>
         </div>
+
+        {/* Not found songs warning */}
+        {notFoundSongs.length > 0 && (
+          <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl overflow-hidden">
+            <button
+              onClick={() => setShowNotFound(!showNotFound)}
+              className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-yellow-500/5 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <AlertTriangle size={20} className="text-yellow-400" />
+                <span className="text-yellow-200">
+                  {notFoundSongs.length} track{notFoundSongs.length !== 1 ? 's' : ''} couldn&apos;t be found
+                </span>
+              </div>
+              {showNotFound ? (
+                <ChevronUp size={20} className="text-yellow-400" />
+              ) : (
+                <ChevronDown size={20} className="text-yellow-400" />
+              )}
+            </button>
+            {showNotFound && (
+              <div className="px-4 pb-4">
+                <ul className="space-y-1 text-sm text-yellow-200/70">
+                  {notFoundSongs.map((song, index) => (
+                    <li key={index} className="pl-8">&bull; {song}</li>
+                  ))}
+                </ul>
+                <p className="text-xs text-yellow-200/50 mt-3 pl-8">
+                  These songs may have different names on Spotify or may not be available.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {tracks.length > 0 && (
           <div className="relative group">
