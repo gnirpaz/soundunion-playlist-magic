@@ -63,12 +63,20 @@ type LoggerFunction = (type: string, level: 'info' | 'error', data: Record<strin
 // Add a Set to track playlist creation requests
 const playlistCreationRequests = new Set<string>()
 
+export interface CreatePlaylistResult {
+  playlistId: string
+  trackIds: string[]
+  foundCount: number
+  totalCount: number
+  notFoundSongs: string[]
+}
+
 export async function createPlaylist(
   accessToken: string, 
   name: string, 
   songs: string[],
   logger: LoggerFunction
-) {
+): Promise<CreatePlaylistResult> {
   // Create a unique key for this request
   const requestKey = `${accessToken}-${songs.join(',')}`
   
@@ -86,6 +94,7 @@ export async function createPlaylist(
 
     // 1. Search and collect tracks
     const foundTracks: string[] = []
+    const notFoundSongs: string[] = []
     
     for (const song of songs) {
       logger('Searching', 'info', { song })
@@ -99,9 +108,11 @@ export async function createPlaylist(
             artist: track.artists[0].name
           })
         } else {
+          notFoundSongs.push(song)
           logger('Track not found', 'error', { song })
         }
       } catch (error) {
+        notFoundSongs.push(song)
         logger('Search failed', 'error', { song, error: String(error) })
       }
     }
@@ -110,7 +121,7 @@ export async function createPlaylist(
       throw new Error('No tracks found')
     }
 
-    // 1. Create playlist
+    // 2. Create playlist
     logger('Creating playlist', 'info', { trackCount: foundTracks.length })
     const userId = await getCurrentUserId(accessToken)
     const createResponse = await fetch(`https://api.spotify.com/v1/users/${userId}/playlists`, {
@@ -150,12 +161,16 @@ export async function createPlaylist(
 
     logger('Playlist created', 'info', { 
       playlistId: playlist.id,
-      tracks: foundTracks.length
+      tracks: foundTracks.length,
+      notFound: notFoundSongs.length
     })
 
     return { 
       playlistId: playlist.id,
-      trackIds: foundTracks.map(uri => uri.split(':')[2])
+      trackIds: foundTracks.map(uri => uri.split(':')[2]),
+      foundCount: foundTracks.length,
+      totalCount: songs.length,
+      notFoundSongs
     }
   } finally {
     playlistCreationRequests.delete(requestKey)
@@ -335,4 +350,176 @@ export async function findRecentPlaylist(accessToken: string) {
 
   const data = await response.json()
   return data.items[0]?.id
+}
+
+// Types for user playlists
+export interface UserPlaylist {
+  id: string
+  name: string
+  description: string | null
+  images: { url: string }[]
+  tracks: { total: number }
+  external_urls: { spotify: string }
+  owner: { display_name: string }
+}
+
+interface PlaylistsResponse {
+  items: UserPlaylist[]
+  total: number
+  limit: number
+  offset: number
+  next: string | null
+}
+
+export async function getUserPlaylists(accessToken: string, limit = 50, offset = 0): Promise<{
+  playlists: UserPlaylist[]
+  total: number
+  hasMore: boolean
+}> {
+  const response = await fetch(
+    `https://api.spotify.com/v1/me/playlists?limit=${limit}&offset=${offset}`,
+    {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      }
+    }
+  )
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.error?.message || 'Failed to fetch playlists')
+  }
+
+  const data: PlaylistsResponse = await response.json()
+  
+  return {
+    playlists: data.items,
+    total: data.total,
+    hasMore: data.next !== null
+  }
+}
+
+// Add tracks to an existing playlist
+export async function addTracksToPlaylist(
+  accessToken: string,
+  playlistId: string,
+  trackUris: string[]
+): Promise<void> {
+  const response = await fetch(
+    `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ uris: trackUris })
+    }
+  )
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.error?.message || 'Failed to add tracks')
+  }
+}
+
+// Remove tracks from a playlist
+export async function removeTracksFromPlaylist(
+  accessToken: string,
+  playlistId: string,
+  trackUris: string[]
+): Promise<void> {
+  const response = await fetch(
+    `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
+    {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        tracks: trackUris.map(uri => ({ uri }))
+      })
+    }
+  )
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.error?.message || 'Failed to remove tracks')
+  }
+}
+
+// Delete a playlist (unfollow)
+export async function deletePlaylist(
+  accessToken: string,
+  playlistId: string
+): Promise<void> {
+  const response = await fetch(
+    `https://api.spotify.com/v1/playlists/${playlistId}/followers`,
+    {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      }
+    }
+  )
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.error?.message || 'Failed to delete playlist')
+  }
+}
+
+// Update playlist details (name, description)
+export async function updatePlaylistDetails(
+  accessToken: string,
+  playlistId: string,
+  updates: { name?: string; description?: string; public?: boolean }
+): Promise<void> {
+  const response = await fetch(
+    `https://api.spotify.com/v1/playlists/${playlistId}`,
+    {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(updates)
+    }
+  )
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.error?.message || 'Failed to update playlist')
+  }
+}
+
+// Reorder tracks in a playlist
+export async function reorderPlaylistTracks(
+  accessToken: string,
+  playlistId: string,
+  rangeStart: number,
+  insertBefore: number,
+  rangeLength = 1
+): Promise<void> {
+  const response = await fetch(
+    `https://api.spotify.com/v1/playlists/${playlistId}/tracks`,
+    {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        range_start: rangeStart,
+        insert_before: insertBefore,
+        range_length: rangeLength
+      })
+    }
+  )
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.error?.message || 'Failed to reorder tracks')
+  }
 } 

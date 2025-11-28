@@ -45,7 +45,7 @@ export default function UserMenu({ session, status }: UserMenuProps) {
             onClick={() => signIn('spotify')}
             className="w-full px-4 py-3 flex items-center gap-2 text-purple-200 hover:text-purple-100 hover:bg-purple-500/10 transition-colors"
           >
-            <img src="/spotify-logo.svg" alt="Spotify" className="h-4 w-4" />
+            <img src="/spotify-logo.png" alt="Spotify" className="h-5 w-5" />
             <span className="text-base">Sign in with Spotify</span>
           </button>
         </DropdownMenuContent>
